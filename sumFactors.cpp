@@ -32,7 +32,8 @@ void* getSmallestDivisorInner(void* input)
 {
 	struct args my_data = *(struct args*) input; //cast args into local data 
 	
-	while(my_data.start <= my_data.end) 
+	//run until the end of the range reached or if it is no longer possible to find a smaller prime 
+	while(my_data.start <= my_data.end && (smallPrime > my_data.start || smallPrime == 0) ) 
 	{
     if (my_data.n % my_data.start == 0){
 			pthread_mutex_lock(&primeMutex);  //lock mutex 
@@ -69,27 +70,37 @@ int64_t getSmallestDivisor(int64_t n, int nThreads)
   if( n % 2 == 0) return 2; // handle multiples of 2
   if( n % 3 == 0) return 3; // handle multiples of 3
 	
-	smallPrime = 0;  
+	smallPrime = 0;
 	int64_t max = sqrt(n);
-	int64_t spiltSize = 6 * floor(max / nThreads /6);  //split in such a way that spiltsize is divisible by 6 
-	pthread_t threadPool[nThreads];
-	struct args temp[nThreads];		// have an array of args to avoid issues with passing them 
-	
-	//loop which constructs all of the pthreads needed 
-	for(int i = 0; i < nThreads; i++)
-	{ 
-		if( (i + 1) * spiltSize < 5) // needed in case a vaule of less than 5 is meant to be the start point 
-			temp[i] = {n, 5, max};
-		else if (i == nThreads - 1) //needed in case it rounds in such a way it goes over or misses one 
-			temp[i] = {n, i * spiltSize + 5, max};
-		else
-			temp[i] = {n, i * spiltSize + 5, ((i + 1) * spiltSize) + 5};
-		pthread_create(&threadPool[i], NULL, getSmallestDivisorInner, (void *) &temp[i]);
+
+	if(n < 500) //for small values no need to multithread create one thread and run it like the original code 
+	{
+		pthread_t thread;
+		struct args temp = {n, 5, max};
+		pthread_create(&thread, NULL, getSmallestDivisorInner, (void *) &temp);
 	}
-	
-	//join all the threads 
-	for(int i = 0; i < nThreads; i++)
-		pthread_join(threadPool[i],NULL);
+	else
+	{
+		int64_t spiltSize = 6 * floor(max / nThreads /6);  //split in such a way that spiltsize is divisible by 6 
+		pthread_t threadPool[nThreads];
+		struct args temp[nThreads];		// have an array of args to avoid issues with passing them 
+		
+		//loop which constructs all of the pthreads needed 
+		for(int i = 0; i < nThreads; i++)
+		{ 
+			if( (i + 1) * spiltSize < 5) // needed in case a vaule of less than 5 is meant to be the start point 
+				temp[i] = {n, 5, max};
+			else if (i == nThreads - 1) //needed in case it rounds in such a way it goes over or misses one 
+				temp[i] = {n, i * spiltSize + 5, max};
+			else
+				temp[i] = {n, i * spiltSize + 5, ((i + 1) * spiltSize) + 5};
+			pthread_create(&threadPool[i], NULL, getSmallestDivisorInner, (void *) &temp[i]);
+		}
+		
+		//join all the threads 
+		for(int i = 0; i < nThreads; i++)
+			pthread_join(threadPool[i],NULL);
+	}
 	
   return smallPrime;
 }
@@ -130,5 +141,3 @@ int main( int argc, char ** argv)
 
   return 0;
 }
-
-// barriers then thread cancellation 
