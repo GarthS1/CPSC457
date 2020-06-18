@@ -7,6 +7,7 @@
  *
  * File name: deadlock.cpp
  *********************************************/
+
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -31,10 +32,8 @@ void startLoopRR(std::vector< std::pair<int64_t, int64_t> > &data, int64_t time)
 	int current_index = 0; // index which keeps track of what time the next job starts 
 	bool cpuIdle = true; // boolean for if the cpu is idle 
 	bool start = true; // for printing 
-	
-	
-	bool switched = true;
-	int64_t rr = 0;
+	int64_t rr = 0; // used for keeping track of how much time done on current round 
+	bool skipped = true; // for printing 
 	
 	while(1) 
 	{
@@ -50,7 +49,6 @@ void startLoopRR(std::vector< std::pair<int64_t, int64_t> > &data, int64_t time)
         readyQ.erase(readyQ.begin());
 				cpuIdle = true; // set CPU to idle 
         jobs_remaining--;
-				switched = true;
         continue;
 			}
 		}
@@ -71,26 +69,26 @@ void startLoopRR(std::vector< std::pair<int64_t, int64_t> > &data, int64_t time)
 		//need in case of false switches 
 		if(cpuIdle && !readyQ.empty() )
 		{
-			switched = true;
 			rr = 0; // set time on slice to 0 now
 			cpuIdle = false;
 			continue;			
 		}
+		
 		// if the cpu is idle or RR time slice exceeded and the queue is not empty 
-    if (rr  >= time && !readyQ.empty())
+    if (rr == time && !readyQ.empty())
 		{
-			int temp = readyQ.at(0).process;
+			int64_t temp = readyQ.at(0).process;
 			readyQ.push_back(readyQ.at(0)); // make a copy at the back 
 			readyQ.erase(readyQ.begin());
 			rr = 0;
 			if(readyQ.at(0).process != temp)
-				switched = true;
+				skipped = true;
+			else
+				skipped = false;
 			cpuIdle = false;
 			continue;
 		}
 
-
-		
 		// if cpu idle output - 
 		if(cpuIdle)
 		{
@@ -98,32 +96,77 @@ void startLoopRR(std::vector< std::pair<int64_t, int64_t> > &data, int64_t time)
 			{
 				std::cout << "-";
 				start = false;
-				switched = false;
 			}
-			else if(switched)
-			{
+			else				
 				std::cout << ",-";
-				switched = false;
-			}
 		}
 		// else output the process running 
 		else
 		{
-			rr++;
-			readyQ.at(0).time_needed--;
 			if(start)
 			{
 				std::cout << "P" << readyQ.at(0).process;
 				start = false;
-				switched = false;
 			}	
-			else if(switched) // only print when job is begining 
-			{
+			else if(skipped) // only print when job is begining 
 				std::cout << ",P" << readyQ.at(0).process;
-				switched = false;
+		}
+		
+    // figure out how much to increment the time 
+		if(!cpuIdle)
+		{
+			// if there are jobs left to add
+			if(current_index < data.size())
+			{
+				// find which comes first the next job coming or the ending of the current job due to time or ending naturally
+				if( readyQ.at(0).time_needed < (data.at(current_index).first - curr_time) || (time -rr) < (data.at(current_index).first - curr_time) )
+				{				
+					// if time_needed exceeds time slice 
+					if(readyQ.at(0).time_needed > (time -rr))
+					{
+						readyQ.at(0).time_needed -= (time -rr); // one time slice done on current job  
+						curr_time += (time -rr); // increment by one time slice 
+						rr = time; // will finish the job						
+					}
+					// otherwise go to when job finishes  
+					else 
+					{
+						curr_time += readyQ.at(0).time_needed; // skip to when job is finished 
+						readyQ.at(0).time_needed = 0; // job is now finished 
+						rr = time; // will finish the job 
+					}
+					skipped = true; // can print 
+				}
+				else
+				{
+					rr += data.at(current_index).first - curr_time; // increase time slice by amount skipped
+					curr_time = data.at(current_index).first; // go to time next job arrives
+					readyQ.at(0).time_needed -= data.at(current_index).first - curr_time; // decrease the amount left by time skipped 
+					skipped = false; //can't print 
+				}
+			}
+			// no more jobs to add figure out how much time to add to either finish job or timeslice 
+			else 
+			{
+				// if time_needed exceeds time slice 
+				if(readyQ.at(0).time_needed > time - rr)
+				{
+					readyQ.at(0).time_needed -= time - rr; // one time slice done on current job - what has already run   
+					curr_time += time - rr; // increment by one time slice - what has already run
+					rr = time; // wil finish the job 
+				}
+				// otherwise go to when job finishes  
+				else 
+				{
+					curr_time += readyQ.at(0).time_needed; // skip to when job is finished 
+					readyQ.at(0).time_needed = 0; // job is now finished 
+				}
+				skipped = true; // can print 
 			}
 		}
-    curr_time ++; 
+		// idle 
+		else 
+			curr_time = data.at(current_index).first; // go to time next job arrives
 	}
 }
 
@@ -314,9 +357,8 @@ int main( int argc, char ** argv)
 	{
 		//If round robin define the time slice 
 		int64_t time = 1;
-		if(roundRobin)
-			time = stoi(argv[3]);
-		startLoopRR(data, time); //start loop 
+		time = strtoll(argv[3], NULL, 10);
+		startLoopRR(data, time ); //start loop 
 	}
 	else
 		startLoopSJF(data); // start loop 
