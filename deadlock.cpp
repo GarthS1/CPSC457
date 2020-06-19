@@ -7,7 +7,7 @@
  *
  * File name: deadlock.cpp
  *********************************************/
-
+// detects deadlocks by being feed in all edges
 #include <stdio.h>
 #include <ctype.h>
 #include <vector>
