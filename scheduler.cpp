@@ -7,7 +7,7 @@
  *
  * File name: deadlock.cpp
  *********************************************/
-
+// a CPU scheulder for either round robin or shortest job first 
 #include <iostream>
 #include <fstream>
 #include <vector>
